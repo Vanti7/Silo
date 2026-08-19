@@ -1,0 +1,19 @@
+# Binaires compilés
+/bin/
+
+# Frontend : dépendances et fichiers locaux (le build web/dist/ reste
+# suivi par git avec un placeholder, régénéré par scripts/build.sh)
+web/frontend/node_modules/
+web/frontend/.vite/
+
+# Données locales / secrets
+*.env
+!deploy/silo.env.example
+*.db
+*.db-journal
+
+# Éditeurs / OS
+.vscode/
+.idea/
+*.log
+Thumbs.db

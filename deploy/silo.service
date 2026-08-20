@@ -15,9 +15,12 @@ RestartSec=5
 # groupe "docker" et lui accorder CAP_SYS_ADMIN pour btrfs.
 User=root
 
+# Toute la configuration vient de ce fichier (voir silo.env.example) :
+# ne pas la dupliquer ici via Environment=, ces directives s'appliqueraient
+# après EnvironmentFile= et écraseraient silencieusement les valeurs que
+# l'utilisateur y définit. Sans SILO_LISTEN_ADDR dans silo.env, le binaire
+# écoute par défaut sur ":8080" (toutes les interfaces).
 EnvironmentFile=-/etc/silo/silo.env
-Environment=SILO_DATA_DIR=/var/lib/silo
-Environment=SILO_LISTEN_ADDR=127.0.0.1:8080
 
 StateDirectory=silo
 StateDirectoryMode=0750

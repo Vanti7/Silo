@@ -39,9 +39,14 @@ scripts/build.sh    build complet (frontend + backend)
 
 ## Prérequis
 
-- Go ≥ 1.24 (utilise `os.Root`)
-- Node.js ≥ 20 / npm (pour le frontend)
-- Sur l'hôte cible : `btrfs-progs`, `findmnt` (util-linux), Docker
+Le binaire compilé est statique et embarque le frontend : **le NAS cible
+n'a besoin ni de Go ni de Node/npm**. Ces outils ne servent que sur la
+machine où on compile (poste de dev, CI...).
+
+- **Machine de build** : Go ≥ 1.24 (utilise `os.Root`), Node.js ≥ 20 / npm
+- **Hôte cible (NAS)** : `btrfs-progs`, `findmnt` (util-linux), Docker —
+  uniquement ce dont silo a besoin pour piloter le système, rien pour le
+  compiler ou l'exécuter lui-même
 
 ## Développement
 
@@ -61,19 +66,30 @@ npm run dev
 
 ## Build de production
 
+À exécuter sur la machine de build (poste de dev, CI...), **pas sur le
+NAS** — c'est ce script qui a besoin de Node/npm, pas le NAS :
+
 ```sh
 scripts/build.sh
 # -> bin/silo (linux/amd64 par défaut)
 ```
 
 Ce script compile le frontend dans `web/dist/` puis le binaire Go, qui
-l'embarque. Cross-compilation vers une autre cible :
+l'embarque. Cross-compilation vers une autre cible (ex : NAS ARM64) :
 `scripts/build.sh linux arm64`.
 
 ## Déploiement (Debian, service systemd)
 
+Depuis la machine de build, copier le binaire vers le NAS :
+
 ```sh
-sudo install -m 0755 bin/silo /usr/local/bin/silo
+scp bin/silo utilisateur@nas:/tmp/silo
+```
+
+Puis, sur le NAS (SSH), aucun outil de build requis :
+
+```sh
+sudo install -m 0755 /tmp/silo /usr/local/bin/silo
 sudo mkdir -p /etc/silo
 sudo cp deploy/silo.env.example /etc/silo/silo.env
 sudo "$EDITOR" /etc/silo/silo.env   # adapter SILO_SHARE_ROOTS, etc.
@@ -82,10 +98,19 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now silo
 ```
 
+(`deploy/silo.env.example` et `deploy/silo.service` doivent aussi être
+présents sur le NAS — les copier avec `scp`, ou cloner le dépôt.)
+
 Le service tourne en root, requis pour piloter `btrfs` (scrub, usage)
-et accéder au socket Docker. Il écoute par défaut sur `127.0.0.1:8080` ;
-exposer via un reverse proxy HTTPS (nginx, Caddy...) pour un accès
-distant.
+et accéder au socket Docker. Par défaut (`SILO_LISTEN_ADDR=:8080` dans
+`silo.env.example`) il écoute sur toutes les interfaces et est donc
+accessible depuis le LAN à `http://<ip-du-nas>:8080`, cookie de session
+en HTTP simple (`SILO_COOKIE_SECURE=false`).
+
+Pour une exposition au-delà du LAN (Internet), mettre `SILO_LISTEN_ADDR`
+à `127.0.0.1:8080`, placer un reverse proxy HTTPS (nginx, Caddy...)
+devant, et repasser `SILO_COOKIE_SECURE` à `true` — sinon le navigateur
+refusera le cookie de session hors HTTPS.
 
 Au premier accès à l'interface, un assistant crée le compte
 administrateur (aucun identifiant par défaut n'est fourni).
@@ -97,7 +122,7 @@ administrateur (aucun identifiant par défaut n'est fourni).
 | `SILO_LISTEN_ADDR`         | `:8080`               | Adresse d'écoute HTTP                                     |
 | `SILO_DATA_DIR`            | `/var/lib/silo`      | Dossier de la base SQLite                                  |
 | `SILO_SHARE_ROOTS`         | *(vide)*               | Racines de partage : `nom=chemin,nom2=chemin2`             |
-| `SILO_COOKIE_SECURE`       | `true`                | Attribut `Secure` du cookie de session (désactiver en HTTP dev) |
+| `SILO_COOKIE_SECURE`       | `true`                | Attribut `Secure` du cookie (mettre à `false` pour un accès HTTP direct sans reverse proxy) |
 | `SILO_SESSION_TTL_HOURS`   | `168`                  | Durée de vie d'une session (heures)                        |
 | `SILO_DOCKER_HOST`         | *(vide = défaut SDK)*  | Hôte du daemon Docker                                      |
 

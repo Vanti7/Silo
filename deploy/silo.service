@@ -1,0 +1,29 @@
+[Unit]
+Description=silo - interface d'administration du NAS
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/silo
+Restart=on-failure
+RestartSec=5
+
+# silo a besoin d'un accès root pour piloter btrfs (scrub, usage) et du
+# socket Docker. À défaut de root, ajouter l'utilisateur de service au
+# groupe "docker" et lui accorder CAP_SYS_ADMIN pour btrfs.
+User=root
+
+# Toute la configuration vient de ce fichier (voir silo.env.example) :
+# ne pas la dupliquer ici via Environment=, ces directives s'appliqueraient
+# après EnvironmentFile= et écraseraient silencieusement les valeurs que
+# l'utilisateur y définit. Sans SILO_LISTEN_ADDR dans silo.env, le binaire
+# écoute par défaut sur ":8080" (toutes les interfaces).
+EnvironmentFile=-/etc/silo/silo.env
+
+StateDirectory=silo
+StateDirectoryMode=0750
+
+[Install]
+WantedBy=multi-user.target

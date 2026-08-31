@@ -1,0 +1,13 @@
+# Le projet se développe sous Windows et s'exécute sous Debian : les
+# fichiers consommés par le NAS doivent impérativement rester en fins de
+# ligne LF. Un script en CRLF échoue à l'exécution avec un message
+# obscur (« bad interpreter: /usr/bin/env bash^M »), et systemd refuse
+# une unité aux lignes terminées par CR.
+*.sh text eol=lf
+*.service text eol=lf
+*.env.example text eol=lf
+
+# Le binaire compilé et les fichiers de build du frontend ne doivent
+# subir aucune conversion.
+bin/* binary
+web/dist/** -text

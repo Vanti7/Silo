@@ -16,6 +16,16 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
   npm est absent, le build s'interrompt au lieu d'embarquer
   silencieusement une interface périmée (`--backend-only` pour passer
   outre délibérément).
+### Fixed
+
+- Les scripts de `scripts/` sont désormais versionnés avec le bit
+  d'exécution : après un `git clone` sur le NAS, ils se lançaient avec
+  « Permission denied » et demandaient un `chmod +x` manuel. Le dépôt
+  étant développé sous Windows (`core.filemode=false`), les `chmod`
+  locaux n'étaient jamais enregistrés.
+- `.gitattributes` force les fins de ligne LF sur les scripts shell,
+  l'unité systemd et l'exemple de configuration, qui échouaient sinon à
+  l'exécution sur le NAS s'ils étaient commités en CRLF.
 
 ### Added
 

@@ -7,6 +7,15 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+### Changed
+
+- `scripts/build.sh` n'exige plus npm : `web/dist/` étant versionné, Go
+  suffit à produire un binaire complet, ce qui permet de compiler
+  directement sur le NAS. npm n'est requis que pour régénérer le
+  frontend. Si ses sources ont changé depuis le build versionné et que
+  npm est absent, le build s'interrompt au lieu d'embarquer
+  silencieusement une interface périmée (`--backend-only` pour passer
+  outre délibérément).
 ### Fixed
 
 - Les scripts de `scripts/` sont désormais versionnés avec le bit
@@ -19,6 +28,9 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
   l'exécution sur le NAS s'ils étaient commités en CRLF.
 
 ### Added
+
+- `scripts/deploy.sh --local --build` : compile puis bascule, en une
+  commande sur le NAS.
 
 - `scripts/deploy.sh` : mise à jour d'une instance existante en une
   commande depuis la machine de build (build, transfert, bascule du

@@ -1,24 +1,90 @@
 #!/usr/bin/env bash
-# Compile le frontend puis le binaire silo pour Debian/amd64.
-# Usage: scripts/build.sh [GOOS] [GOARCH]
+# Compile le frontend puis le binaire silo.
+#
+# web/dist/ étant versionné, Go suffit à produire un binaire complet : le
+# frontend n'est régénéré que si npm est disponible, ou si les sources ont
+# changé depuis le dernier build versionné (auquel cas npm devient
+# indispensable, sous peine d'embarquer une interface périmée).
+#
+# Usage : scripts/build.sh [GOOS] [GOARCH] [--backend-only]
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-goos="${1:-linux}"
-goarch="${2:-amd64}"
+statut_frontend="$repo_root/scripts/lib/frontend-status.sh"
 
-check_build_tools() {
-  # Ce script compile silo : il doit tourner sur une machine de build
-  # (poste de dev, CI...), pas sur le NAS cible, qui n'a besoin que du
-  # binaire final (voir README.md, section Prérequis).
-  for tool in go npm; do
-    if ! command -v "$tool" >/dev/null 2>&1; then
-      echo "erreur : '$tool' introuvable." >&2
-      echo "Ce script doit être exécuté sur une machine de build (Go + Node/npm)," >&2
-      echo "pas sur le NAS cible. Voir README.md, section Prérequis / Déploiement." >&2
-      exit 1
-    fi
+goos="linux"
+goarch="amd64"
+backend_only="non"
+positionnels=()
+
+parse_args() {
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --backend-only) backend_only="oui" ;;
+      -h|--help)
+        sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+        exit 0
+        ;;
+      -*) echo "erreur : option inconnue $1" >&2; exit 1 ;;
+      *) positionnels+=("$1") ;;
+    esac
+    shift
   done
+
+  [ "${#positionnels[@]}" -ge 1 ] && goos="${positionnels[0]}"
+  [ "${#positionnels[@]}" -ge 2 ] && goarch="${positionnels[1]}"
+  [ "${#positionnels[@]}" -le 2 ] || { echo "erreur : trop de paramètres" >&2; exit 1; }
+}
+
+exige_go() {
+  command -v go >/dev/null 2>&1 || {
+    echo "erreur : 'go' introuvable." >&2
+    echo "Installer Go ≥ 1.24 (Debian 13 : apt install golang-go)." >&2
+    exit 1
+  }
+}
+
+# decide_frontend renseigne frontend_a_regenerer, et interrompt le script
+# si régénérer est indispensable mais impossible. Le résultat passe par
+# une variable plutôt que par la sortie standard : dans une substitution
+# de commande, un `exit` ne quitterait que le sous-shell et le build se
+# poursuivrait malgré l'erreur, en embarquant un frontend périmé.
+frontend_a_regenerer=""
+
+decide_frontend() {
+  if [ "$backend_only" = "oui" ]; then
+    frontend_a_regenerer="non"
+    return
+  fi
+
+  local etat=0
+  bash "$statut_frontend" "$repo_root" || etat=$?
+
+  if command -v npm >/dev/null 2>&1; then
+    frontend_a_regenerer="oui"
+    return
+  fi
+
+  # npm absent : on ne peut réutiliser web/dist/ que s'il est à jour.
+  if [ "$etat" -eq 1 ]; then
+    echo "erreur : les sources du frontend ont changé depuis le build versionné" >&2
+    echo "dans web/dist/, et npm est absent pour le régénérer." >&2
+    echo >&2
+    echo "Compile le frontend sur une machine disposant de Node/npm et commite" >&2
+    echo "web/dist/, ou installe npm ici, ou force le build backend seul :" >&2
+    echo "  scripts/build.sh --backend-only   # embarque le frontend versionné tel quel" >&2
+    exit 1
+  fi
+
+  if [ ! -f "$repo_root/web/dist/index.html" ]; then
+    echo "erreur : ni npm ni build frontend versionné dans web/dist/." >&2
+    exit 1
+  fi
+
+  if [ "$etat" -eq 2 ]; then
+    echo "note : impossible de vérifier la fraîcheur de web/dist/ (hors dépôt git)." >&2
+  fi
+  frontend_a_regenerer="non"
 }
 
 build_frontend() {
@@ -37,8 +103,19 @@ build_backend() {
   )
 }
 
-check_build_tools
-build_frontend
-build_backend
+main() {
+  parse_args "$@"
+  exige_go
 
-echo "== terminé : $repo_root/bin/silo =="
+  decide_frontend
+  if [ "$frontend_a_regenerer" = "oui" ]; then
+    build_frontend
+  else
+    echo "== frontend : réutilisation du build versionné dans web/dist/ =="
+  fi
+
+  build_backend
+  echo "== terminé : $repo_root/bin/silo =="
+}
+
+main "$@"

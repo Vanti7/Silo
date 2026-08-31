@@ -36,19 +36,24 @@ web/dist/           build du frontend, embarqué par web/embed.go
 deploy/             unité systemd, exemple de fichier d'environnement
 scripts/build.sh    build complet (frontend + backend)
 scripts/deploy.sh   mise à jour d'une instance (par SSH ou sur place)
-scripts/lib/        bascule exécutée sur l'hôte cible, et ses tests
+scripts/lib/        bascule sur l'hôte cible, fraîcheur du frontend, tests
 ```
 
 ## Prérequis
 
-Le binaire compilé est statique et embarque le frontend : **le NAS cible
-n'a besoin ni de Go ni de Node/npm**. Ces outils ne servent que sur la
-machine où on compile (poste de dev, CI...).
+Le binaire compilé est statique et embarque le frontend : **exécuter silo
+ne demande ni Go ni Node/npm sur le NAS**.
 
-- **Machine de build** : Go ≥ 1.24 (utilise `os.Root`), Node.js ≥ 20 / npm
-- **Hôte cible (NAS)** : `btrfs-progs`, `findmnt` (util-linux), Docker —
-  uniquement ce dont silo a besoin pour piloter le système, rien pour le
-  compiler ou l'exécuter lui-même
+- **Pour exécuter (NAS)** : `btrfs-progs`, `findmnt` (util-linux), Docker
+  — uniquement ce dont silo a besoin pour piloter le système
+- **Pour compiler** : Go ≥ 1.24 (utilise `os.Root`). Node.js ≥ 20 / npm
+  n'est nécessaire que pour régénérer le frontend
+
+`web/dist/` (le build du frontend) est versionné, ce qui permet de
+compiler avec Go seul — y compris directement sur le NAS. `build.sh`
+refuse toutefois de réutiliser ce build s'il a pris du retard sur les
+sources et que npm est absent, pour ne jamais produire silencieusement un
+binaire à l'interface périmée.
 
 ## Développement
 
@@ -68,17 +73,19 @@ npm run dev
 
 ## Build de production
 
-À exécuter sur la machine de build (poste de dev, CI...), **pas sur le
-NAS** — c'est ce script qui a besoin de Node/npm, pas le NAS :
+Go suffit : le frontend versionné dans `web/dist/` est réutilisé si npm
+est absent. Ce script tourne donc aussi bien sur le poste de dev que sur
+le NAS.
 
 ```sh
 scripts/build.sh
 # -> bin/silo (linux/amd64 par défaut)
 ```
 
-Ce script compile le frontend dans `web/dist/` puis le binaire Go, qui
-l'embarque. Cross-compilation vers une autre cible (ex : NAS ARM64) :
-`scripts/build.sh linux arm64`.
+Quand npm est disponible, le frontend est recompilé dans `web/dist/`
+avant le build Go qui l'embarque. `--backend-only` force la réutilisation
+du frontend versionné. Cross-compilation vers une autre cible (ex : NAS
+ARM64) : `scripts/build.sh linux arm64`.
 
 ## Déploiement (Debian, service systemd)
 
@@ -145,9 +152,20 @@ si le compte distant n'est pas root, `sudo` sans mot de passe.
 
 ### Depuis le NAS lui-même
 
-Si tu préfères piloter la mise à jour depuis le NAS, transfère d'abord le
-binaire compilé (le NAS n'a ni Go ni Node/npm, il ne peut pas le
-construire), puis bascule sur place :
+Avec Go installé sur le NAS (`apt install golang-go` sur Debian 13), tout
+se fait sur place, sans passer par le poste de dev :
+
+```sh
+git pull
+scripts/deploy.sh --local --build
+```
+
+`--build` compile puis bascule. Le frontend versionné dans `web/dist/`
+est réutilisé tel quel, donc npm n'est pas requis — sauf si les sources
+du frontend ont changé, auquel cas le build s'arrête plutôt que
+d'embarquer une interface périmée.
+
+Sans Go sur le NAS, transfère le binaire compilé ailleurs :
 
 ```sh
 # sur la machine de build
@@ -158,10 +176,9 @@ scp bin/silo root@nas.local:/tmp/silo
 scripts/deploy.sh --local /tmp/silo
 ```
 
-Sans chemin, `--local` prend `bin/silo` du dépôt. Le mode local fait
-exactement la même bascule que le mode distant — sauvegarde, vérification
-et retour arrière automatique — puisque les deux exécutent
-`scripts/lib/apply-update.sh` sur l'hôte cible.
+Le mode local fait exactement la même bascule que le mode distant —
+sauvegarde, vérification et retour arrière automatique — puisque les deux
+exécutent `scripts/lib/apply-update.sh` sur l'hôte cible.
 
 ## Mots de passe oubliés
 
@@ -206,8 +223,9 @@ sont révoquées.
 ## Tests
 
 ```sh
-go test ./...                          # backend
-bash scripts/lib/apply-update_test.sh  # bascule et retour arrière
+go test ./...                              # backend
+bash scripts/lib/apply-update_test.sh      # bascule et retour arrière
+bash scripts/lib/frontend-status_test.sh   # fraîcheur du frontend versionné
 ```
 
 Les tests de bascule remplacent `systemctl` et `curl` par des doublures

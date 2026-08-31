@@ -8,6 +8,7 @@ import { Storage } from './pages/Storage'
 import { Docker } from './pages/Docker'
 import { Files } from './pages/Files'
 import { Users } from './pages/Users'
+import { Account } from './pages/Account'
 
 function LoadingScreen() {
   return <div className="h-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }}>Chargement…</div>
@@ -41,6 +42,7 @@ export function App() {
         <Route path="/storage" element={<Storage />} />
         <Route path="/docker" element={<Docker />} />
         <Route path="/files" element={<Files />} />
+        <Route path="/account" element={<Account />} />
         <Route
           path="/users"
           element={user.role === 'admin' ? <Users /> : <Navigate to="/" replace />}

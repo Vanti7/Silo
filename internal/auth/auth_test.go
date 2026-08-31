@@ -1,6 +1,9 @@
 package auth
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestHashAndVerifyPassword(t *testing.T) {
 	hash, err := HashPassword("mot-de-passe-correct")
@@ -29,6 +32,26 @@ func TestNewSessionToken_UniqueEtNonVide(t *testing.T) {
 	}
 	if a == b {
 		t.Error("deux jetons générés successivement ne devraient pas être identiques")
+	}
+}
+
+func TestValidatePassword(t *testing.T) {
+	valides := []string{"12345678", "un-mot-de-passe-correct"}
+	for _, p := range valides {
+		if err := ValidatePassword(p); err != nil {
+			t.Errorf("ValidatePassword(%q) = %v, attendu nil", p, err)
+		}
+	}
+
+	invalides := map[string]string{
+		"vide":       "",
+		"trop court": "1234567",
+		"trop long":  strings.Repeat("a", MaxPasswordLength+1),
+	}
+	for cas, p := range invalides {
+		if err := ValidatePassword(p); err == nil {
+			t.Errorf("ValidatePassword (%s) : attendu une erreur", cas)
+		}
 	}
 }
 

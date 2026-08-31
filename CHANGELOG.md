@@ -15,6 +15,17 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
   précédente est sauvegardée puis restaurée automatiquement si le service
   ne repart pas. La configuration `/etc/silo/silo.env` n'est jamais
   touchée, et l'unité systemd seulement sur `--with-unit`.
+- Réinitialisation de mot de passe :
+  - sous-commande `silo reset-password <utilisateur>`, chemin de
+    récupération en cas de perte du mot de passe administrateur (l'accès
+    shell à l'hôte tient lieu de preuve de propriété) ;
+  - page « Mon compte » permettant à tout utilisateur connecté de changer
+    son propre mot de passe, la saisie du mot de passe actuel étant exigée ;
+  - bouton de réinitialisation sur la page Utilisateurs, pour qu'un
+    administrateur redéfinisse le mot de passe de n'importe quel compte.
+- Révocation des sessions à chaque changement de mot de passe : un cookie
+  obtenu avant le changement cesse de fonctionner. La session à l'origine
+  du changement reste active.
 
 - Backend Go (`cmd/silo`) exposant une API REST JSON sous `/api/v1` et
   servant le frontend embarqué.

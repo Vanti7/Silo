@@ -16,6 +16,25 @@ import (
 // CookieName est le nom du cookie de session HTTP.
 const CookieName = "silo_session"
 
+// Bornes de longueur d'un mot de passe, partagées par l'API HTTP et la
+// sous-commande CLI de réinitialisation afin qu'elles ne divergent pas.
+const (
+	MinPasswordLength = 8
+	MaxPasswordLength = 256
+)
+
+// ValidatePassword vérifie qu'un mot de passe respecte les contraintes de
+// longueur, et retourne une erreur explicite sinon.
+func ValidatePassword(password string) error {
+	if len(password) < MinPasswordLength {
+		return fmt.Errorf("mot de passe trop court (%d caractères minimum)", MinPasswordLength)
+	}
+	if len(password) > MaxPasswordLength {
+		return fmt.Errorf("mot de passe trop long (%d caractères maximum)", MaxPasswordLength)
+	}
+	return nil
+}
+
 // HashPassword dérive un hash bcrypt à partir d'un mot de passe en clair.
 func HashPassword(password string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)

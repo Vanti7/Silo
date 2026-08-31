@@ -118,6 +118,15 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 			writeStoreErr(w, err)
 			return
 		}
+		// Réinitialisation par un administrateur : toutes les sessions du
+		// compte concerné sont révoquées, il devra se reconnecter (y compris
+		// l'administrateur lui-même s'il réinitialise son propre compte par
+		// ce biais plutôt que par /auth/password).
+		if err := s.Store.DeleteUserSessions(id); err != nil {
+			s.Logger.Error("révocation des sessions après réinitialisation", "user", id, "err", err)
+			writeError(w, http.StatusInternalServerError, "erreur interne")
+			return
+		}
 	}
 
 	user, err := s.Store.GetUserByID(id)

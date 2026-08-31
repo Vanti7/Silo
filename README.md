@@ -141,6 +141,34 @@ scripts/deploy.sh root@nas.local --arch arm64  # NAS ARM
 
 Prérequis : un accès SSH sans interaction (clé publique installée) et,
 si le compte distant n'est pas root, `sudo` sans mot de passe.
+## Mots de passe oubliés
+
+Aucun flux de réinitialisation non authentifié n'est exposé sur le web :
+sans canal de vérification (SMTP), il permettrait à quiconque sur le
+réseau de s'emparer du compte administrateur. La récupération passe donc
+par l'hôte, où l'accès shell tient lieu de preuve de propriété :
+
+```sh
+sudo silo reset-password vanti
+```
+
+La commande demande le nouveau mot de passe (saisie masquée) et révoque
+les sessions ouvertes du compte. Inutile d'arrêter le service : la base
+tolère l'accès concurrent.
+
+Elle lit la base dans `SILO_DATA_DIR` (`/var/lib/silo` par défaut). Si tu
+as changé ce chemin dans `/etc/silo/silo.env`, passe-le explicitement,
+les variables du service n'étant pas héritées par un shell interactif :
+
+```sh
+sudo SILO_DATA_DIR=/chemin/personnalise silo reset-password vanti
+```
+
+Depuis l'interface, un utilisateur connecté change son propre mot de
+passe dans « Mon compte » (mot de passe actuel exigé), et un
+administrateur peut réinitialiser celui de n'importe quel compte depuis
+la page Utilisateurs. Dans les deux cas, les sessions du compte concerné
+sont révoquées.
 
 ## Variables d'environnement
 

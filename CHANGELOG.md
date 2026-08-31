@@ -9,6 +9,13 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ### Added
 
+- `scripts/deploy.sh` : mise à jour d'une instance existante en une
+  commande depuis la machine de build (build, transfert, bascule du
+  binaire, redémarrage et vérification que le service répond). La version
+  précédente est sauvegardée puis restaurée automatiquement si le service
+  ne repart pas. La configuration `/etc/silo/silo.env` n'est jamais
+  touchée, et l'unité systemd seulement sur `--with-unit`.
+
 - Backend Go (`cmd/silo`) exposant une API REST JSON sous `/api/v1` et
   servant le frontend embarqué.
 - Authentification par session opaque (cookie httpOnly), assistant de

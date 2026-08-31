@@ -35,6 +35,7 @@ web/frontend/       code source du frontend (React/TS/Vite)
 web/dist/           build du frontend, embarqué par web/embed.go
 deploy/             unité systemd, exemple de fichier d'environnement
 scripts/build.sh    build complet (frontend + backend)
+scripts/deploy.sh   mise à jour d'une instance existante sur le NAS
 ```
 
 ## Prérequis
@@ -114,6 +115,32 @@ refusera le cookie de session hors HTTPS.
 
 Au premier accès à l'interface, un assistant crée le compte
 administrateur (aucun identifiant par défaut n'est fourni).
+
+## Mise à jour
+
+Une fois la première installation faite, les versions suivantes se
+déploient en une commande depuis la machine de build :
+
+```sh
+scripts/deploy.sh root@nas.local
+```
+
+Le script compile, transfère le binaire, sauvegarde la version en place
+dans `/usr/local/bin/silo.precedent`, bascule, redémarre le service et
+vérifie qu'il répond. **Si le service ne repart pas, la version
+précédente est restaurée automatiquement** et la commande sort en erreur.
+
+`/etc/silo/silo.env` n'est jamais modifié. L'unité systemd non plus, sauf
+demande explicite :
+
+```sh
+scripts/deploy.sh root@nas.local --with-unit   # met aussi à jour silo.service
+scripts/deploy.sh root@nas.local --skip-build  # redéploie bin/silo tel quel
+scripts/deploy.sh root@nas.local --arch arm64  # NAS ARM
+```
+
+Prérequis : un accès SSH sans interaction (clé publique installée) et,
+si le compte distant n'est pas root, `sudo` sans mot de passe.
 
 ## Variables d'environnement
 

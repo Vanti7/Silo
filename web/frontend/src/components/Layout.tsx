@@ -68,12 +68,12 @@ export function Layout() {
             {theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
           </button>
           <div className="flex items-center justify-between px-3 py-1">
-            <div className="text-sm">
+            <NavLink to="/account" className="text-sm text-left rounded-lg" title="Mon compte">
               <div className="font-medium">{user?.username}</div>
               <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
                 {user?.role === 'admin' ? 'Administrateur' : 'Utilisateur'}
               </div>
-            </div>
+            </NavLink>
             <button onClick={() => logout()} title="Déconnexion" style={{ color: 'var(--text-muted)' }}>
               <LogOut size={18} />
             </button>

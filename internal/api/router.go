@@ -30,6 +30,7 @@ func NewRouter(s *Server, spaFS fs.FS) http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
 	mux.HandleFunc("POST /api/v1/auth/logout", s.handleLogout)
 	mux.HandleFunc("GET /api/v1/auth/me", s.handleMe)
+	mux.Handle("PATCH /api/v1/auth/password", authed(s.handleChangePassword))
 
 	// -- Système (lecture, tout utilisateur authentifié) --
 	mux.Handle("GET /api/v1/system/stats", authed(s.handleSystemStats))

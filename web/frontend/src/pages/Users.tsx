@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Trash2, UserPlus } from 'lucide-react'
+import { KeyRound, Trash2, UserPlus } from 'lucide-react'
 import { api, ApiError } from '../api/client'
 import type { User } from '../api/types'
 import { useAuth } from '../context/AuthContext'
@@ -11,6 +11,7 @@ export function Users() {
   const [users, setUsers] = useState<User[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [resetFor, setResetFor] = useState<User | null>(null)
 
   function load() {
     api.get<User[]>('/users').then(setUsers).catch((err) => setError(err instanceof ApiError ? err.message : 'Erreur'))
@@ -65,6 +66,8 @@ export function Users() {
         />
       )}
 
+      {resetFor && <ResetPasswordForm user={resetFor} onClose={() => setResetFor(null)} />}
+
       <Card>
         {!users ? (
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
@@ -96,15 +99,25 @@ export function Users() {
                       <option value="user">Utilisateur</option>
                     </select>
                   </td>
-                  <td className="py-2 text-right">
-                    <button
-                      onClick={() => removeUser(u)}
-                      className="p-1.5 rounded-md"
-                      style={{ background: 'var(--surface-alt)' }}
-                      title="Supprimer"
-                    >
-                      <Trash2 size={15} style={{ color: 'var(--danger)' }} />
-                    </button>
+                  <td className="py-2">
+                    <div className="flex justify-end gap-1.5">
+                      <button
+                        onClick={() => setResetFor(u)}
+                        className="p-1.5 rounded-md"
+                        style={{ background: 'var(--surface-alt)' }}
+                        title="Réinitialiser le mot de passe"
+                      >
+                        <KeyRound size={15} />
+                      </button>
+                      <button
+                        onClick={() => removeUser(u)}
+                        className="p-1.5 rounded-md"
+                        style={{ background: 'var(--surface-alt)' }}
+                        title="Supprimer"
+                      >
+                        <Trash2 size={15} style={{ color: 'var(--danger)' }} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -113,6 +126,65 @@ export function Users() {
         )}
       </Card>
     </div>
+  )
+}
+
+function ResetPasswordForm({ user, onClose }: { user: User; onClose: () => void }) {
+  const { user: me } = useAuth()
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    if (password !== confirm) {
+      setError('Les deux saisies ne correspondent pas')
+      return
+    }
+    setBusy(true)
+    try {
+      await api.patch(`/users/${user.id}`, { password })
+      setDone(true)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Erreur inattendue')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card title={`Réinitialiser le mot de passe de « ${user.username} »`}>
+      <form onSubmit={onSubmit} className="space-y-3 max-w-sm">
+        <Field label="Nouveau mot de passe" type="password" value={password} onChange={setPassword} autoFocus />
+        <Field label="Confirmer le mot de passe" type="password" value={confirm} onChange={setConfirm} />
+
+        {error && (
+          <p className="text-sm" style={{ color: 'var(--danger)' }}>
+            {error}
+          </p>
+        )}
+        {done && (
+          <p className="text-sm" style={{ color: 'var(--success)' }}>
+            Mot de passe réinitialisé. Les sessions de ce compte ont été déconnectées.
+          </p>
+        )}
+
+        <div className="flex gap-2">
+          <Button type="submit" variant="primary" disabled={busy || done}>
+            Réinitialiser
+          </Button>
+          <Button onClick={onClose}>{done ? 'Fermer' : 'Annuler'}</Button>
+        </div>
+
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          8 caractères minimum. Ce compte devra se reconnecter
+          {user.id === me?.id && ' — y compris vous, puisqu\'il s\'agit de votre propre compte'}.
+        </p>
+      </form>
+    </Card>
   )
 }
 

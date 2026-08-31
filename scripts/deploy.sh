@@ -20,6 +20,7 @@ binaire_local=""
 mode="distant"
 with_unit="non"
 skip_build="non"
+build_local="non"
 goarch="amd64"
 
 usage() {
@@ -29,9 +30,11 @@ Usage :
   scripts/deploy.sh --local [binaire] [options]    directement sur le NAS
 
 Options :
-  --local          bascule sur place, sans SSH ni compilation. Le binaire
-                   doit avoir été compilé ailleurs puis transféré ; par
-                   défaut bin/silo du dépôt, sinon le chemin donné.
+  --local          bascule sur place, sans SSH. Utilise bin/silo du dépôt
+                   par défaut, ou le chemin donné.
+  --build          (mode local) compile avant de basculer. Go suffit :
+                   web/dist/ étant versionné, npm n'est requis que si les
+                   sources du frontend ont changé.
   --with-unit      met aussi à jour /etc/systemd/system/silo.service
   --skip-build     (mode distant) réutilise bin/silo sans recompiler
   --arch <arch>    (mode distant) architecture cible (défaut : amd64)
@@ -39,7 +42,7 @@ Options :
 
 Exemples :
   scripts/deploy.sh root@nas.local          # tout-en-un depuis le poste
-  scripts/deploy.sh --local                 # sur le NAS, depuis bin/silo
+  scripts/deploy.sh --local --build         # sur le NAS : compile et bascule
   scripts/deploy.sh --local /tmp/silo       # sur le NAS, binaire transféré
 USAGE
 }
@@ -48,6 +51,7 @@ parse_args() {
   while [ $# -gt 0 ]; do
     case "$1" in
       --local) mode="local" ;;
+      --build) build_local="oui" ;;
       --with-unit) with_unit="oui" ;;
       --skip-build) skip_build="oui" ;;
       --arch)
@@ -99,16 +103,24 @@ parse_args() {
 # --- Mode local -----------------------------------------------------------
 
 deploy_local() {
+  if [ "$build_local" = "oui" ]; then
+    [ -z "$binaire_local" ] || {
+      echo "erreur : --build compile bin/silo, un chemin de binaire n'a pas de sens." >&2
+      exit 1
+    }
+    "$repo_root/scripts/build.sh" "$(go env GOOS 2>/dev/null || echo linux)" \
+      "$(go env GOARCH 2>/dev/null || echo amd64)"
+  fi
+
   local binaire="${binaire_local:-$repo_root/bin/silo}"
 
   if [ ! -f "$binaire" ]; then
     echo "erreur : binaire introuvable : $binaire" >&2
     echo >&2
-    echo "Ce mode ne compile pas : le NAS n'a pas besoin de Go ni de Node/npm," >&2
-    echo "le binaire se construit sur la machine de dev puis se transfère :" >&2
-    echo "  scripts/build.sh                       # sur la machine de dev" >&2
-    echo "  scp bin/silo <cet-hote>:/tmp/silo      # puis, ici :" >&2
-    echo "  scripts/deploy.sh --local /tmp/silo" >&2
+    echo "Trois options :" >&2
+    echo "  scripts/deploy.sh --local --build      # compiler ici (Go requis)" >&2
+    echo "  scripts/deploy.sh --local /tmp/silo    # binaire transféré depuis ailleurs" >&2
+    echo "  scripts/build.sh && scripts/deploy.sh --local" >&2
     exit 1
   fi
 

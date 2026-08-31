@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -21,12 +22,46 @@ import (
 )
 
 func main() {
+	// Sans sous-commande, silo démarre le serveur : c'est le mode utilisé
+	// par l'unité systemd.
+	if len(os.Args) > 1 {
+		if err := runSubcommand(os.Args[1], os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "erreur :", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	if err := run(logger); err != nil {
 		logger.Error("arrêt sur erreur fatale", "err", err)
 		os.Exit(1)
 	}
+}
+
+func runSubcommand(name string, args []string) error {
+	switch name {
+	case "reset-password":
+		return runResetPassword(args)
+	case "-h", "--help", "help":
+		printUsage()
+		return nil
+	default:
+		printUsage()
+		return fmt.Errorf("sous-commande inconnue : %q", name)
+	}
+}
+
+func printUsage() {
+	fmt.Fprint(os.Stderr, `silo - interface d'administration du NAS
+
+Usage :
+  silo                              démarre le serveur HTTP
+  silo reset-password <utilisateur> réinitialise le mot de passe d'un compte
+
+La configuration est lue depuis les variables d'environnement (voir README).
+`)
 }
 
 func run(logger *slog.Logger) error {

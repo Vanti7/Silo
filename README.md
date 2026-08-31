@@ -35,6 +35,7 @@ web/frontend/       code source du frontend (React/TS/Vite)
 web/dist/           build du frontend, embarqué par web/embed.go
 deploy/             unité systemd, exemple de fichier d'environnement
 scripts/build.sh    build complet (frontend + backend)
+scripts/deploy.sh   mise à jour d'une instance existante sur le NAS
 ```
 
 ## Prérequis
@@ -114,6 +115,60 @@ refusera le cookie de session hors HTTPS.
 
 Au premier accès à l'interface, un assistant crée le compte
 administrateur (aucun identifiant par défaut n'est fourni).
+
+## Mise à jour
+
+Une fois la première installation faite, les versions suivantes se
+déploient en une commande depuis la machine de build :
+
+```sh
+scripts/deploy.sh root@nas.local
+```
+
+Le script compile, transfère le binaire, sauvegarde la version en place
+dans `/usr/local/bin/silo.precedent`, bascule, redémarre le service et
+vérifie qu'il répond. **Si le service ne repart pas, la version
+précédente est restaurée automatiquement** et la commande sort en erreur.
+
+`/etc/silo/silo.env` n'est jamais modifié. L'unité systemd non plus, sauf
+demande explicite :
+
+```sh
+scripts/deploy.sh root@nas.local --with-unit   # met aussi à jour silo.service
+scripts/deploy.sh root@nas.local --skip-build  # redéploie bin/silo tel quel
+scripts/deploy.sh root@nas.local --arch arm64  # NAS ARM
+```
+
+Prérequis : un accès SSH sans interaction (clé publique installée) et,
+si le compte distant n'est pas root, `sudo` sans mot de passe.
+## Mots de passe oubliés
+
+Aucun flux de réinitialisation non authentifié n'est exposé sur le web :
+sans canal de vérification (SMTP), il permettrait à quiconque sur le
+réseau de s'emparer du compte administrateur. La récupération passe donc
+par l'hôte, où l'accès shell tient lieu de preuve de propriété :
+
+```sh
+sudo silo reset-password vanti
+```
+
+La commande demande le nouveau mot de passe (saisie masquée) et révoque
+les sessions ouvertes du compte. Inutile d'arrêter le service : la base
+tolère l'accès concurrent.
+
+Elle lit la base dans `SILO_DATA_DIR` (`/var/lib/silo` par défaut). Si tu
+as changé ce chemin dans `/etc/silo/silo.env`, passe-le explicitement,
+les variables du service n'étant pas héritées par un shell interactif :
+
+```sh
+sudo SILO_DATA_DIR=/chemin/personnalise silo reset-password vanti
+```
+
+Depuis l'interface, un utilisateur connecté change son propre mot de
+passe dans « Mon compte » (mot de passe actuel exigé), et un
+administrateur peut réinitialiser celui de n'importe quel compte depuis
+la page Utilisateurs. Dans les deux cas, les sessions du compte concerné
+sont révoquées.
 
 ## Variables d'environnement
 

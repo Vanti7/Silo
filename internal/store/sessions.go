@@ -52,6 +52,17 @@ func (s *Store) DeleteSession(tokenHash string) error {
 	return nil
 }
 
+// DeleteUserSessions invalide toutes les sessions d'un utilisateur.
+// Appelé après un changement de mot de passe : un cookie obtenu avant le
+// changement cesse ainsi de fonctionner.
+func (s *Store) DeleteUserSessions(userID int64) error {
+	_, err := s.db.Exec(`DELETE FROM sessions WHERE user_id = ?`, userID)
+	if err != nil {
+		return fmt.Errorf("store: suppression sessions utilisateur: %w", err)
+	}
+	return nil
+}
+
 // DeleteExpiredSessions purge les sessions expirées. À appeler
 // périodiquement pour éviter la croissance illimitée de la table.
 func (s *Store) DeleteExpiredSessions() error {

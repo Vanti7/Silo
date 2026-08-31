@@ -9,6 +9,12 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ### Added
 
+- `scripts/deploy.sh` : mise à jour d'une instance existante en une
+  commande depuis la machine de build (build, transfert, bascule du
+  binaire, redémarrage et vérification que le service répond). La version
+  précédente est sauvegardée puis restaurée automatiquement si le service
+  ne repart pas. La configuration `/etc/silo/silo.env` n'est jamais
+  touchée, et l'unité systemd seulement sur `--with-unit`.
 - Réinitialisation de mot de passe :
   - sous-commande `silo reset-password <utilisateur>`, chemin de
     récupération en cas de perte du mot de passe administrateur (l'accès

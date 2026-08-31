@@ -1,32 +1,53 @@
 #!/usr/bin/env bash
-# Met à jour silo sur le NAS : build local, transfert, bascule du binaire
-# et redémarrage du service. Si le service ne repart pas, la version
-# précédente est automatiquement restaurée.
-# Le fichier de configuration /etc/silo/silo.env n'est jamais touché.
+# Met à jour silo, dans l'un des deux modes suivants :
+#
+#   - distant (défaut) : depuis la machine de build, compile, transfère le
+#     binaire vers le NAS par SSH et bascule ;
+#   - local (--local) : directement sur le NAS, à partir d'un binaire déjà
+#     compilé ailleurs et transféré (le NAS n'a ni Go ni Node/npm).
+#
+# Dans les deux cas, la bascule proprement dite est faite par
+# scripts/lib/apply-update.sh, exécuté sur l'hôte cible : sauvegarde,
+# redémarrage, vérification et retour arrière automatique si le service
+# ne repart pas.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+apply_script="$repo_root/scripts/lib/apply-update.sh"
+
 target=""
+binaire_local=""
+mode="distant"
 with_unit="non"
 skip_build="non"
 goarch="amd64"
 
 usage() {
   cat <<'USAGE'
-Usage : scripts/deploy.sh <utilisateur@hote> [options]
+Usage :
+  scripts/deploy.sh <utilisateur@hote> [options]   depuis la machine de build
+  scripts/deploy.sh --local [binaire] [options]    directement sur le NAS
 
+Options :
+  --local          bascule sur place, sans SSH ni compilation. Le binaire
+                   doit avoir été compilé ailleurs puis transféré ; par
+                   défaut bin/silo du dépôt, sinon le chemin donné.
   --with-unit      met aussi à jour /etc/systemd/system/silo.service
-  --skip-build     réutilise bin/silo tel quel, sans recompiler
-  --arch <arch>    architecture cible (défaut : amd64 ; ex. arm64)
+  --skip-build     (mode distant) réutilise bin/silo sans recompiler
+  --arch <arch>    (mode distant) architecture cible (défaut : amd64)
   -h, --help       affiche cette aide
 
-Exemple : scripts/deploy.sh root@nas.local
+Exemples :
+  scripts/deploy.sh root@nas.local          # tout-en-un depuis le poste
+  scripts/deploy.sh --local                 # sur le NAS, depuis bin/silo
+  scripts/deploy.sh --local /tmp/silo       # sur le NAS, binaire transféré
 USAGE
 }
 
 parse_args() {
   while [ $# -gt 0 ]; do
     case "$1" in
+      --local) mode="local" ;;
       --with-unit) with_unit="oui" ;;
       --skip-build) skip_build="oui" ;;
       --arch)
@@ -37,19 +58,65 @@ parse_args() {
       -h|--help) usage; exit 0 ;;
       -*) echo "erreur : option inconnue $1" >&2; usage >&2; exit 1 ;;
       *)
-        [ -z "$target" ] || { echo "erreur : cible déjà définie ($target)" >&2; exit 1; }
-        target="$1"
+        # Le paramètre positionnel désigne la cible SSH en mode distant, et
+        # le binaire à installer en mode local.
+        if [ "$mode" = "local" ]; then
+          [ -z "$binaire_local" ] || { echo "erreur : binaire déjà défini ($binaire_local)" >&2; exit 1; }
+          binaire_local="$1"
+        else
+          [ -z "$target" ] || { echo "erreur : cible déjà définie ($target)" >&2; exit 1; }
+          target="$1"
+        fi
         ;;
     esac
     shift
   done
 
-  if [ -z "$target" ]; then
+  # --local peut apparaître après le paramètre positionnel : on rattrape le
+  # cas où celui-ci a été rangé comme cible SSH.
+  if [ "$mode" = "local" ] && [ -n "$target" ]; then
+    if [ -n "$binaire_local" ]; then
+      echo "erreur : trop de paramètres ($target, $binaire_local)" >&2
+      exit 1
+    fi
+    binaire_local="$target"
+    target=""
+  fi
+
+  if [ "$mode" = "distant" ] && [ -z "$target" ]; then
     echo "erreur : cible SSH manquante (ex. root@nas.local)" >&2
+    echo "Pour mettre à jour depuis le NAS lui-même : scripts/deploy.sh --local" >&2
     usage >&2
     exit 1
   fi
+
+  [ -f "$apply_script" ] || {
+    echo "erreur : script de bascule introuvable : $apply_script" >&2
+    exit 1
+  }
 }
+
+# --- Mode local -----------------------------------------------------------
+
+deploy_local() {
+  local binaire="${binaire_local:-$repo_root/bin/silo}"
+
+  if [ ! -f "$binaire" ]; then
+    echo "erreur : binaire introuvable : $binaire" >&2
+    echo >&2
+    echo "Ce mode ne compile pas : le NAS n'a pas besoin de Go ni de Node/npm," >&2
+    echo "le binaire se construit sur la machine de dev puis se transfère :" >&2
+    echo "  scripts/build.sh                       # sur la machine de dev" >&2
+    echo "  scp bin/silo <cet-hote>:/tmp/silo      # puis, ici :" >&2
+    echo "  scripts/deploy.sh --local /tmp/silo" >&2
+    exit 1
+  fi
+
+  echo "== mise à jour locale depuis $binaire =="
+  bash "$apply_script" "$binaire" "$with_unit" "$repo_root/deploy/silo.service"
+}
+
+# --- Mode distant ---------------------------------------------------------
 
 check_prerequisites() {
   local tool
@@ -88,112 +155,39 @@ transfer() {
   fi
 }
 
-# swap exécute la bascule sur le NAS. Le script distant est transmis tel
-# quel (heredoc entre quotes) : rien n'est interprété localement, et les
-# paramètres passent par des arguments positionnels.
-swap() {
-  echo "== bascule et redémarrage du service =="
-  ssh "$target" bash -s -- "$with_unit" <<'REMOTE'
-set -euo pipefail
-
-with_unit="$1"
-binaire="/usr/local/bin/silo"
-sauvegarde="/usr/local/bin/silo.precedent"
-
-if [ "$(id -u)" -eq 0 ]; then
-  sudo_cmd=()
-else
-  sudo_cmd=(sudo -n)
-  "${sudo_cmd[@]}" true 2>/dev/null || {
-    echo "erreur : sudo non disponible sans mot de passe sur l'hôte distant." >&2
-    echo "Connecte-toi en root, ou autorise sudo sans mot de passe pour ce compte." >&2
-    exit 1
-  }
-fi
-
-# Adresse d'écoute effective, pour la vérification HTTP. Une adresse sans
-# hôte (":8080") ou à l'écoute de toutes les interfaces est interrogée sur
-# la boucle locale.
-adresse_sante() {
-  local addr=":8080"
-  local depuis_conf=""
-  if [ -r /etc/silo/silo.env ]; then
-    depuis_conf="$(grep -E '^[[:space:]]*SILO_LISTEN_ADDR=' /etc/silo/silo.env |
-      tail -n1 | cut -d= -f2- | tr -d "\"' ")"
-  fi
-  [ -n "$depuis_conf" ] && addr="$depuis_conf"
-
-  case "$addr" in
-    :*) echo "127.0.0.1${addr}" ;;
-    0.0.0.0:*) echo "127.0.0.1:${addr##*:}" ;;
-    *) echo "$addr" ;;
-  esac
+# cleanup_remote retire les fichiers déposés dans /tmp sur la cible. La
+# bascule ne les supprime pas elle-même : apply-update.sh ignore d'où
+# vient le binaire, et en mode local il ne doit surtout pas l'effacer.
+cleanup_remote() {
+  ssh "$target" "rm -f /tmp/silo.new /tmp/silo.service.new" 2>/dev/null || true
 }
 
-# Le service peut mettre un instant à écouter : on lui laisse 15 s. Sans
-# curl sur l'hôte, on se contente de l'état systemd.
-verifier_service() {
-  local i
-  for i in $(seq 1 15); do
-    if systemctl is-active --quiet silo; then
-      if ! command -v curl >/dev/null 2>&1; then
-        return 0
-      fi
-      if curl -fsS --max-time 3 "http://$(adresse_sante)/api/v1/setup/status" >/dev/null 2>&1; then
-        return 0
-      fi
-    fi
-    sleep 1
-  done
-  return 1
-}
-
-if [ -x "$binaire" ]; then
-  "${sudo_cmd[@]}" cp -p "$binaire" "$sauvegarde"
-fi
-
-"${sudo_cmd[@]}" install -m 0755 /tmp/silo.new "$binaire"
-"${sudo_cmd[@]}" rm -f /tmp/silo.new
-
-if [ "$with_unit" = "oui" ]; then
-  "${sudo_cmd[@]}" install -m 0644 /tmp/silo.service.new /etc/systemd/system/silo.service
-  "${sudo_cmd[@]}" rm -f /tmp/silo.service.new
-  "${sudo_cmd[@]}" systemctl daemon-reload
-  echo "unité systemd mise à jour"
-fi
-
-"${sudo_cmd[@]}" systemctl restart silo
-
-if verifier_service; then
-  echo "service actif et répond aux requêtes"
-  exit 0
-fi
-
-echo "erreur : le service ne répond pas après la mise à jour." >&2
-if [ -x "$sauvegarde" ]; then
-  echo "retour arrière vers la version précédente..." >&2
-  "${sudo_cmd[@]}" install -m 0755 "$sauvegarde" "$binaire"
-  "${sudo_cmd[@]}" systemctl restart silo
-  if verifier_service; then
-    echo "version précédente restaurée, le service répond de nouveau." >&2
-  else
-    echo "le service ne repart pas non plus avec la version précédente." >&2
-  fi
-else
-  echo "aucune version précédente à restaurer (première installation)." >&2
-fi
-echo "Inspecter les journaux : journalctl -u silo -n 50" >&2
-exit 1
-REMOTE
-}
-
-main() {
-  parse_args "$@"
+deploy_remote() {
   check_prerequisites
   build
   transfer
-  swap
-  echo "== mise à jour terminée sur $target =="
+
+  echo "== bascule et redémarrage du service =="
+  local statut=0
+  ssh "$target" bash -s -- /tmp/silo.new "$with_unit" /tmp/silo.service.new \
+    < "$apply_script" || statut=$?
+
+  cleanup_remote
+  return $statut
+}
+
+# --- Point d'entrée -------------------------------------------------------
+
+main() {
+  parse_args "$@"
+
+  if [ "$mode" = "local" ]; then
+    deploy_local
+    echo "== mise à jour terminée =="
+  else
+    deploy_remote
+    echo "== mise à jour terminée sur $target =="
+  fi
 }
 
 main "$@"

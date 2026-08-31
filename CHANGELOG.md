@@ -15,6 +15,11 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
   précédente est sauvegardée puis restaurée automatiquement si le service
   ne repart pas. La configuration `/etc/silo/silo.env` n'est jamais
   touchée, et l'unité systemd seulement sur `--with-unit`.
+- `scripts/deploy.sh --local` : même bascule, mais exécutée directement
+  sur le NAS à partir d'un binaire compilé ailleurs et transféré, sans
+  passer par SSH. La logique de bascule est partagée entre les deux modes
+  (`scripts/lib/apply-update.sh`) et couverte par des tests qui simulent
+  systemd, y compris le retour arrière.
 - Réinitialisation de mot de passe :
   - sous-commande `silo reset-password <utilisateur>`, chemin de
     récupération en cas de perte du mot de passe administrateur (l'accès

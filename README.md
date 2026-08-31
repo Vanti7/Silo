@@ -35,7 +35,8 @@ web/frontend/       code source du frontend (React/TS/Vite)
 web/dist/           build du frontend, embarqué par web/embed.go
 deploy/             unité systemd, exemple de fichier d'environnement
 scripts/build.sh    build complet (frontend + backend)
-scripts/deploy.sh   mise à jour d'une instance existante sur le NAS
+scripts/deploy.sh   mise à jour d'une instance (par SSH ou sur place)
+scripts/lib/        bascule exécutée sur l'hôte cible, et ses tests
 ```
 
 ## Prérequis
@@ -141,6 +142,27 @@ scripts/deploy.sh root@nas.local --arch arm64  # NAS ARM
 
 Prérequis : un accès SSH sans interaction (clé publique installée) et,
 si le compte distant n'est pas root, `sudo` sans mot de passe.
+
+### Depuis le NAS lui-même
+
+Si tu préfères piloter la mise à jour depuis le NAS, transfère d'abord le
+binaire compilé (le NAS n'a ni Go ni Node/npm, il ne peut pas le
+construire), puis bascule sur place :
+
+```sh
+# sur la machine de build
+scripts/build.sh
+scp bin/silo root@nas.local:/tmp/silo
+
+# sur le NAS
+scripts/deploy.sh --local /tmp/silo
+```
+
+Sans chemin, `--local` prend `bin/silo` du dépôt. Le mode local fait
+exactement la même bascule que le mode distant — sauvegarde, vérification
+et retour arrière automatique — puisque les deux exécutent
+`scripts/lib/apply-update.sh` sur l'hôte cible.
+
 ## Mots de passe oubliés
 
 Aucun flux de réinitialisation non authentifié n'est exposé sur le web :
@@ -184,8 +206,14 @@ sont révoquées.
 ## Tests
 
 ```sh
-go test ./...
+go test ./...                          # backend
+bash scripts/lib/apply-update_test.sh  # bascule et retour arrière
 ```
+
+Les tests de bascule remplacent `systemctl` et `curl` par des doublures
+et redirigent les chemins d'installation vers un dossier temporaire : ils
+s'exécutent donc sans systemd ni privilèges, y compris sur la machine de
+développement.
 
 ## Sécurité
 

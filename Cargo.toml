@@ -1,0 +1,44 @@
+[package]
+name = "silo"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Interface web d'administration pour NAS maison (Debian + btrfs + Docker)"
+publish = false
+
+[dependencies]
+anyhow = "1.0.104"
+axum = { version = "0.8.9", features = ["multipart"] }
+base64 = "0.23.1"
+bcrypt = "0.19.3"
+bollard = "0.21.1"
+bytes = "1"
+cap-std = "4.0.3"
+futures-util = "0.3.34"
+getrandom = "0.4.3"
+hex = "0.4.3"
+httpdate = "1.0.3"
+hyper-util = { version = "0.1.21", features = ["http1", "http2", "server-auto", "server-graceful", "service", "tokio"] }
+mime_guess = "2.0.5"
+regex = "1.13.1"
+rpassword = "7.5.4"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+rust-embed = "8.13.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.10"
+tempfile = "3.27.0"
+thiserror = "2.0.21"
+time = { version = "0.3", features = ["formatting", "macros"] }
+tokio = { version = "1.53.3", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "time"] }
+tokio-util = { version = "0.7.20", features = ["io"] }
+tracing = "0.1.44"
+tracing-subscriber = "0.3.23"
+
+[dev-dependencies]
+tokio = { version = "1.53.3", features = ["test-util"] }
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+
+[profile.release]
+strip = true

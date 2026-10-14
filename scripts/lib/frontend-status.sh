@@ -2,8 +2,8 @@
 # Détermine si le build du frontend versionné dans web/dist/ correspond
 # encore aux sources de web/frontend/.
 #
-# web/dist/ est suivi par git pour que `go build` fonctionne sans Node :
-# c'est ce qui permet de compiler silo sur le NAS, qui n'a que Go. En
+# web/dist/ est suivi par git pour que `cargo build` fonctionne sans Node :
+# c'est ce qui permet de compiler silo sur le NAS sans y installer npm. En
 # contrepartie, ce build versionné peut prendre du retard sur les sources,
 # et l'embarquer tel quel produirait un binaire à l'interface périmée,
 # sans le moindre avertissement.

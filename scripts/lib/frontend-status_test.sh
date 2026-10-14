@@ -110,8 +110,8 @@ test_modification_backend() {
   commiter "sources frontend"
   echo "build" > "$depot/web/dist/index.html"
   commiter "build frontend"
-  mkdir -p "$depot/internal/api"
-  echo "package api" > "$depot/internal/api/router.go"
+  mkdir -p "$depot/src/api"
+  echo "pub fn new_router() {}" > "$depot/src/api/router.rs"
   commiter "modification du backend"
 
   verifier_code "backend modifié -> 0" 0

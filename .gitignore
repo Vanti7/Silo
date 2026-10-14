@@ -1,5 +1,6 @@
 # Binaires compilés
 /bin/
+/target/
 
 # Frontend : dépendances et fichiers locaux (le build web/dist/ reste
 # suivi par git avec un placeholder, régénéré par scripts/build.sh)

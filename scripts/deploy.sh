@@ -3,8 +3,8 @@
 #
 #   - distant (défaut) : depuis la machine de build, compile, transfère le
 #     binaire vers le NAS par SSH et bascule ;
-#   - local (--local) : directement sur le NAS, à partir d'un binaire déjà
-#     compilé ailleurs et transféré (le NAS n'a ni Go ni Node/npm).
+#   - local (--local) : directement sur le NAS, à partir d'un binaire
+#     compilé sur place (--build) ou ailleurs puis transféré.
 #
 # Dans les deux cas, la bascule proprement dite est faite par
 # scripts/lib/apply-update.sh, exécuté sur l'hôte cible : sauvegarde,
@@ -32,7 +32,7 @@ Usage :
 Options :
   --local          bascule sur place, sans SSH. Utilise bin/silo du dépôt
                    par défaut, ou le chemin donné.
-  --build          (mode local) compile avant de basculer. Go suffit :
+  --build          (mode local) compile avant de basculer. cargo suffit :
                    web/dist/ étant versionné, npm n'est requis que si les
                    sources du frontend ont changé.
   --with-unit      met aussi à jour /etc/systemd/system/silo.service
@@ -102,14 +102,26 @@ parse_args() {
 
 # --- Mode local -----------------------------------------------------------
 
+# arch_hote donne l'architecture de la machine courante dans le vocabulaire
+# de scripts/build.sh.
+arch_hote() {
+  case "$(uname -m)" in
+    x86_64) echo "amd64" ;;
+    aarch64 | arm64) echo "arm64" ;;
+    armv7*) echo "arm" ;;
+    *) echo "erreur : architecture non prise en charge : $(uname -m)" >&2; exit 1 ;;
+  esac
+}
+
 deploy_local() {
   if [ "$build_local" = "oui" ]; then
     [ -z "$binaire_local" ] || {
       echo "erreur : --build compile bin/silo, un chemin de binaire n'a pas de sens." >&2
       exit 1
     }
-    "$repo_root/scripts/build.sh" "$(go env GOOS 2>/dev/null || echo linux)" \
-      "$(go env GOARCH 2>/dev/null || echo amd64)"
+    local arch
+    arch="$(arch_hote)"
+    "$repo_root/scripts/build.sh" linux "$arch"
   fi
 
   local binaire="${binaire_local:-$repo_root/bin/silo}"
@@ -118,7 +130,7 @@ deploy_local() {
     echo "erreur : binaire introuvable : $binaire" >&2
     echo >&2
     echo "Trois options :" >&2
-    echo "  scripts/deploy.sh --local --build      # compiler ici (Go requis)" >&2
+    echo "  scripts/deploy.sh --local --build      # compiler ici (cargo requis)" >&2
     echo "  scripts/deploy.sh --local /tmp/silo    # binaire transféré depuis ailleurs" >&2
     echo "  scripts/build.sh && scripts/deploy.sh --local" >&2
     exit 1
